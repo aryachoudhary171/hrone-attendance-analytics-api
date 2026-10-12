@@ -28,13 +28,7 @@ $env:MONGO_URI = "mongodb://localhost:27017"
 $env:MONGO_DB = "attendance_db"
 ```
 
-To load the supplied sample data:
-
-```powershell
-python sample_seed.py
-```
-
-**The sample seeder deletes existing documents in the configured `employees` and `attendance_logs` collections before inserting the examples. Use a disposable database.**
+The assignment's sample data files are intentionally not included in this repository. If you have the original candidate kit locally and choose to run `sample_seed.py`, point it at a disposable database first: it deletes existing documents in the configured `employees` and `attendance_logs` collections before inserting the sample records.
 
 ## Start and verify
 
@@ -49,7 +43,7 @@ The app creates its indexes at startup. `GET http://localhost:8000/health` retur
 ## Tests
 
 ```powershell
-python -m pytest -q tests
+.\.venv\Scripts\python.exe -m pytest -q tests
 ```
 
 Tests use the configured MongoDB database and create/clean employee records with `EMP9901` and `EMP9902`; choose a disposable test database if those codes are already in use.
@@ -58,4 +52,4 @@ Tests use the configured MongoDB database and create/clean employee records with
 
 All API instants are strict epoch milliseconds; MongoDB stores UTC datetimes. Dates and shift times are interpreted in IST. Unique natural-key indexes and conditional updates protect the attendance state transitions and correction history. The monthly summaries, department summary, leaderboard, and daily trend are aggregation pipelines; the trend uses `$densify`, `$fill`, and a database window for its moving average. Explain routes call MongoDB with `executionStats` verbosity.
 
-The included tests exercise real MongoDB operations on the supplied small sample plus temporary edge-case records. The local verification used MongoDB 8.3.7 and did not benchmark the target 100,000-record dataset or MongoDB 6.0 specifically. See `REVIEW.md` and `DECISIONS.md` for the code review and design answers.
+The included tests exercise real MongoDB operations and temporary edge cases; all 8 tests pass locally. A separate synthetic 100,000-record dataset was used to check the five explain routes and attendance list filters on MongoDB 8.3.7; each tested plan used `IXSCAN` and contained no `COLLSCAN`. The department trend returned the expected daily rows in that check. MongoDB 6.0 compatibility has not been verified locally. See `REVIEW.md` and `DECISIONS.md` for the code review and design answers.
