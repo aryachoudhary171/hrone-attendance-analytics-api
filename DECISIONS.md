@@ -1,6 +1,6 @@
 # Implementation decisions
 
-1. **Indexes.** Employee indexes are unique `emp_code`, `(department, joined_on, emp_code)`, and `(joined_on, emp_code)` for identity and eligible headcount. Attendance uses unique `(emp_code, date)` for daily uniqueness/lookups, `(date desc, emp_code asc)` for listing, and `(date, status, emp_code)` for filtered lists. I omitted a status-only index because no main query filters on status alone.
+1. **Indexes.** Employee indexes are unique `emp_code`, `(department, joined_on, emp_code)`, and `(joined_on, emp_code)` for identity and eligible headcount. Attendance uses unique `(emp_code, date)` for daily uniqueness/lookups, `(date desc, emp_code asc)` for listing, `(date, status, emp_code)` for date/status filters, and `(status, date desc, emp_code asc)` so status-only lists can filter and preserve the required order without scanning the collection.
 
 2. **Punch-in race.** Both requests can read the same employee and compute the same date. The unique attendance index accepts one insert; MongoDB rejects the other, and the API maps that duplicate-key error to 409.
 

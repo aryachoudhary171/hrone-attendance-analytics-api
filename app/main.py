@@ -24,6 +24,7 @@ def ensure_indexes():
     db.attendance_logs.create_index([('emp_code',1),('date',1)],unique=True,name='uq_attendance_employee_date')
     db.attendance_logs.create_index([('date',-1),('emp_code',1)],name='attendance_date_code')
     db.attendance_logs.create_index([('date',1),('status',1),('emp_code',1)],name='attendance_date_status_code')
+    db.attendance_logs.create_index([('status',1),('date',-1),('emp_code',1)],name='attendance_status_date_code')
 
 def now(): return datetime.now(UTC).replace(microsecond=0)
 def msdt(v):
@@ -231,8 +232,10 @@ def leaderboard_pipe(month,dept,limit):
     return p+[{'$setWindowFields':{'sortBy':{'total_late_minutes':-1},'output':{'rank':{'$rank':{}}}}},{'$match':{'rank':{'$lte':limit}}},{'$sort':{'total_late_minutes':-1,'_id':1}},{'$project':{'_id':0,'rank':1,'emp_code':'$_id','name':'$e.name','department':'$e.department','total_late_minutes':1,'late_count':1}}]
 def trend_pipe(dept,start,end):
     a=datetime.combine(start,time.min,UTC);b=datetime.combine(end+timedelta(days=1),time.min,UTC)
-    return [{'$match':{'date':{'$gte':start.isoformat(),'$lte':end.isoformat()}}},{'$lookup':{'from':'employees','localField':'emp_code','foreignField':'emp_code','as':'e'}},{'$unwind':'$e'},{'$match':{'e.department':dept}},
-     {'$group':{'_id':'$date','present_count':{'$sum':{'$cond':[{'$in':['$status',PRESENT]},{'$cond':[{'$ifNull':['$half_day',False]},0.5,1]},0]}},'late_count':{'$sum':{'$cond':[{'$gt':[{'$ifNull':['$late_minutes',0]},0]},1,0]}}}},
+    return [{'$match':{'department':dept}},
+     {'$lookup':{'from':'attendance_logs','let':{'c':'$emp_code'},'pipeline':[{'$match':{'$expr':{'$and':[{'$eq':['$emp_code','$$c']},{'$gte':['$date',start.isoformat()]},{'$lte':['$date',end.isoformat()]}]}}},
+       {'$group':{'_id':'$date','present_count':{'$sum':{'$cond':[{'$in':['$status',PRESENT]},{'$cond':[{'$ifNull':['$half_day',False]},0.5,1]},0]}},'late_count':{'$sum':{'$cond':[{'$gt':[{'$ifNull':['$late_minutes',0]},0]},1,0]}}}}],'as':'days'}},
+     {'$unwind':'$days'},{'$replaceRoot':{'newRoot':'$days'}},
      {'$unionWith':{'coll':'employees','pipeline':[{'$match':{'department':dept}},{'$limit':1},{'$project':{'_id':{'$literal':start.isoformat()},'present_count':{'$literal':0},'late_count':{'$literal':0}}}]}},
      {'$group':{'_id':'$_id','present_count':{'$sum':'$present_count'},'late_count':{'$sum':'$late_count'}}},
      {'$project':{'_id':0,'date':{'$dateFromString':{'dateString':'$_id'}},'present_count':1,'late_count':1}},{'$densify':{'field':'date','range':{'step':1,'unit':'day','bounds':[a,b]} }},{'$fill':{'output':{'present_count':{'value':0},'late_count':{'value':0}}}},
@@ -258,7 +261,7 @@ def trend(department:str,from_:str=Query(alias='from'),to:str=Query()):
     except ValueError as e:raise HTTPException(422,str(e))
     if b<a or (b-a).days+1>92:raise HTTPException(422,'invalid trend range')
     if not db.employees.count_documents({'department':department}):raise HTTPException(404,'department not found')
-    return {'department':department,'items':list(db.attendance_logs.aggregate(trend_pipe(department,a,b)))}
+    return {'department':department,'items':list(db.employees.aggregate(trend_pipe(department,a,b)))}
 
 def explain(coll,pipeline=None,q=None,sort=None,skip=0,limit=None,hint=None):
     if pipeline is not None:
@@ -301,6 +304,6 @@ def explain_ep(endpoint:str,emp_code:Optional[str]=None,month:Optional[str]=None
         try:a,b=day(from_),day(to)
         except ValueError as e:raise HTTPException(422,str(e))
         if b<a or (b-a).days+1>92:raise HTTPException(422,'invalid date range')
-        p=explain(db.attendance_logs,trend_pipe(department,a,b));c='attendance_logs'
+        p=explain(db.employees,trend_pipe(department,a,b));c='employees'
     else:raise HTTPException(422,'unknown endpoint')
     return {'endpoint':endpoint,'collection':c,'explain':json_util.loads(json_util.dumps(p))}

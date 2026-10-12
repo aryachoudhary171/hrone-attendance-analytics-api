@@ -154,6 +154,7 @@ def test_no_log_employee_and_empty_trend_gap_fill(client):
 
 def test_all_explain_routes_return_real_execution_stats(client):
     urls = ["/admin/explain/attendance_list?page=1&page_size=20",
+            "/admin/explain/attendance_list?status=PRESENT&page=1&page_size=20",
             "/admin/explain/employee_monthly?emp_code=EMP0001&month=2026-07",
             "/admin/explain/department_summary?month=2026-07",
             "/admin/explain/late_leaderboard?month=2026-07",
